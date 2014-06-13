@@ -37,7 +37,8 @@ const char conv_help[] = "\n"
 "    -h  --help\n"
 "    -l  --list                  list supported encoder/decoder.\n"
 "    -v  --verbose               enable verbose print.\n"
-"    -o <filename>\n"
+"    -i <filename>               input file name\n"
+"    -o <filename>               output file name\n"
 "\n"
 "        --width <value>         bits: 8, 16, etc.\n"
 "        --rate <value>          Hz: 8000, 44100, etc.\n"
@@ -79,7 +80,7 @@ int argproc_conv(s_audinfo_t *inf, int argc, char *argv[])
         switch (c) {
         case 'h':
             usage(CONV_HELP);
-            break;    
+            break;
         case 'l':
             break;
         case 'v':
@@ -116,7 +117,7 @@ int argproc_conv(s_audinfo_t *inf, int argc, char *argv[])
         }
     }
 
-    convert_process(inf);
+    ret = convert_process(inf);
     return ret;
 }
 
@@ -127,21 +128,25 @@ int convert_process(s_audinfo_t *inf)
     int input_compressed, output_compressed;
 
     /* misc check */
-    input_filetype = parse_filename(inf->fnamei, FILENAME_SIZE);
+    input_filetype = parse_filename(inf->fnamei, strlen(inf->fnamei));
     input_compressed = file_is_compressed(input_filetype);
-    output_filetype = parse_filename(inf->fnameo, FILENAME_SIZE);
+    output_filetype = parse_filename(inf->fnameo, strlen(inf->fnameo));
     output_compressed = file_is_compressed(output_filetype);
+    Log("%d %d", input_filetype, input_compressed);
+    Log("%d %d", output_filetype, output_compressed);
 
     /* decode check */
     if (input_compressed && !output_compressed) {
         inf->codec_type = file_to_codec(input_filetype);
-        audio_file_decode(inf);
+        Log("decode: %d", inf->codec_type);
+        ret = audio_file_decode(inf);
     }
 
     /* encode check */
-    if (input_compressed && !output_compressed) {
+    if (!input_compressed && output_compressed) {
         inf->codec_type = file_to_codec(output_filetype);
-        audio_file_encode(inf);
+        Log("encode: %d", inf->codec_type);
+        ret = audio_file_encode(inf);
     }
 
     return ret;
@@ -155,11 +160,13 @@ int file_is_compressed(int filetype)
     case FILE_PCM:
     case FILE_WAV:
         ret = 0;
+        break;
     case FILE_MP3:
     case FILE_AAC:
     case FILE_AMR:
     case FILE_AWB:
         ret = 1;
+        break;
     }
     return ret;
 }
@@ -172,14 +179,19 @@ int file_to_codec(int filetype)
     case FILE_PCM:
     case FILE_WAV:
         ret = CODEC_PCM;
+        break;
     case FILE_MP3:
         ret = CODEC_MP3;
+        break;
     case FILE_AAC:
         ret = CODEC_AAC;
+        break;
     case FILE_AMR:
         ret = CODEC_AMR;
+        break;
     case FILE_AWB:
         ret = CODEC_AWB;
+        break;
     }
     return ret;
 }

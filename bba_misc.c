@@ -68,33 +68,37 @@ int updatewavhead(s_audinfo_t *inf)
 
 int parse_filename(char *fname, int length)
 {
+Log("%s %d", fname, length);
     int ret = 0;
     int idx = 0;
     char *ext = NULL;
 
-    if (fname == NULL || length > FILENAME_SIZE - 1)
+    if (fname == NULL || length > (FILENAME_SIZE - 1))
         return -1;
     idx = length - 5;
-    ext = fname + idx;
-    do {
+    ext = fname;
+    Log("%s %d", ext, idx);
+    while (*(ext + idx) != '.') {
+        Log(":%c", *(ext + idx));
         idx++;
         if (idx > length)
             return -1;
-    } while (*(ext + idx) != '.');
-    ext = ext + idx + 1;
-    if (!strcmp(ext, FILESTR_RAW))
+    }
+    ext += idx;
+    Log("%s %d", ext, idx);
+    if (!strncmp(ext, FILESTR_RAW, strlen(FILESTR_RAW)))
         ret = FILE_RAW;
-    else if (!strcmp(ext, FILESTR_PCM))
+    else if (!strncmp(ext, FILESTR_PCM, strlen(FILESTR_PCM)))
         ret = FILE_PCM;
-    else if (!strcmp(ext, FILESTR_WAV))
+    else if (!strncmp(ext, FILESTR_WAV, strlen(FILESTR_WAV)))
         ret = FILE_WAV;
-    else if (!strcmp(ext, FILESTR_MP3))
+    else if (!strncmp(ext, FILESTR_MP3, strlen(FILESTR_MP3)))
         ret = FILE_MP3;
-    else if (!strcmp(ext, FILESTR_AAC))
+    else if (!strncmp(ext, FILESTR_AAC, strlen(FILESTR_AAC)))
         ret = FILE_AAC;
-    else if (!strcmp(ext, FILESTR_AMR))
+    else if (!strncmp(ext, FILESTR_AMR, strlen(FILESTR_AMR)))
         ret = FILE_AMR;
-    else if (!strcmp(ext, FILESTR_AWB))
+    else if (!strncmp(ext, FILESTR_AWB, strlen(FILESTR_AWB)))
         ret = FILE_AWB;
     return ret;
 }
@@ -133,6 +137,145 @@ int audinfo(s_audinfo_t *inf)
     Log("wav dataid:          0x%8x", inf->wave.dataid);
     Log("wav data size in Bytes:%8d", inf->wave.datasz);
     return ret;
+}
+
+int parsewav(s_audinfo_t *inf)
+{
+    int ret = 0;
+
+    if ((inf->fpi = fopen(inf->fnamei, "rb")) == NULL){
+        fprintf (stderr, "Input file '%s' does not exist !!\n", inf->fnamei);
+        return -1;
+    } else {
+        fseek(inf->fpi, 0L, SEEK_END);
+        inf->filebytes = ftell(inf->fpi);
+        rewind(inf->fpi);
+        Log("Open input '%s' [%d bytes] succeed.", inf->fnamei, inf->filebytes);
+    }
+
+    /* read wav info to inf->wav structure */
+    ret = fread(inf->wavhead, sizeof(char), WAVHEAD_SIZE, inf->fpi);
+    if (ret != WAVHEAD_SIZE) {
+        Loge("read %d of %ld", ret, WAVHEAD_SIZE);
+        ret = -1;
+        goto end;
+    } else
+        ret = 0;
+
+    int idx = 0;
+    inf->wave.riffid = str2int32(inf->wavhead + idx, 1);
+    idx += 4;
+    if (inf->wave.riffid != WAV_RIFF_ID) {
+        Loge("riffid %x not match %x", inf->wave.riffid, WAV_RIFF_ID);
+        goto end;
+    }
+
+    inf->wave.riffsz = str2int32(inf->wavhead + idx, inf->ibn);
+    idx += 4;
+
+    inf->wave.waveid = str2int32(inf->wavhead + idx, 1);
+    idx += 4;
+    if (inf->wave.waveid != WAV_WAVE_ID) {
+        Loge("waveid %x not match %x", inf->wave.waveid, WAV_WAVE_ID);
+        goto end;
+    }
+
+    inf->wave.fmtid = str2int32(inf->wavhead + idx, 1);
+    idx += 4;
+    if (inf->wave.fmtid != WAV_FMT_ID) {
+        Loge("fmtid %x not match %x", inf->wave.fmtid, WAV_FMT_ID);
+        goto end;
+    }
+
+    inf->wave.fmtsz     = str2int32(inf->wavhead + idx, inf->ibn);
+    idx += 4;
+
+    inf->wave.ftag      = str2int16(inf->wavhead + idx, inf->ibn);
+    idx += 2;
+
+    inf->wave.nchan     = str2int16(inf->wavhead + idx, inf->ibn);
+    idx += 2;
+
+    inf->wave.samplerate= str2int32(inf->wavhead + idx, inf->ibn);
+    idx += 4;
+
+    inf->wave.byte_rate = str2int32(inf->wavhead + idx, inf->ibn);
+    idx += 4;
+
+    inf->wave.blockalign= str2int16(inf->wavhead + idx, inf->ibn);
+    idx += 2;
+
+    inf->wave.width     = str2int16(inf->wavhead + idx, inf->ibn);
+    idx += 2;
+
+    inf->wave.dataid = str2int32(inf->wavhead + idx, 1);
+    idx += 4;
+    if (inf->wave.dataid != WAV_DATA_ID) {
+        Loge("dataid %x not match %x", inf->wave.dataid, WAV_DATA_ID);
+        goto end;
+    }
+
+    inf->wave.datasz = str2int32(inf->wavhead + idx, inf->ibn);
+    idx += 4;
+
+    /* refresh inf structure from inf->wav structure */
+    inf->ibn = 0;
+    inf->voldb = 0.0;
+    inf->volgain = 0.0;
+    inf->length = (double)inf->wave.datasz / inf->wave.nchan /\
+                  (inf->wave.width >> 3) / inf->wave.samplerate;
+    inf->recsize = 0;
+    inf->width = inf->wave.width;
+    inf->rate = inf->wave.samplerate;
+    inf->nchan = inf->wave.nchan;
+    inf->nsample = inf->wave.datasz / inf->wave.nchan / (inf->wave.width >> 3);
+    inf->databytes = inf->wave.datasz;
+    inf->filebytes = inf->wave.riffsz + 8;
+
+end:
+    fclose(inf->fpi);
+    audinfo(inf);
+    return ret;
+}
+
+int parsemp3(s_audinfo_t *inf)
+{
+    int ret = 0;
+
+    if ((inf->fpi = fopen(inf->fnamei, "rb")) == NULL){
+        fprintf (stderr, "Input file '%s' does not exist !!\n", inf->fnamei);
+        return -1;
+    } else {
+        fseek(inf->fpi, 0L, SEEK_END);
+        inf->filebytes = ftell(inf->fpi);
+        rewind(inf->fpi);
+        Log("Open input '%s' [%d bytes] succeed.", inf->fnamei, inf->filebytes);
+    }
+
+    /* search for frame header */
+
+    /* search for ID3 tag */
+
+    fclose(inf->fpi);
+    return ret;
+}
+
+int parseaac(s_audinfo_t *inf)
+{
+	int ret = 0;
+	return ret;
+}
+
+int parseamr(s_audinfo_t *inf)
+{
+	int ret = 0;
+	return ret;
+}
+
+int parseawb(s_audinfo_t *inf)
+{
+	int ret = 0;
+	return ret;
 }
 
 int alsa_prepare(s_audinfo_t *inf)
@@ -515,7 +658,7 @@ int audio_file_decode(s_audinfo_t *inf)
     int ret = 0;
 
 #ifdef USE_LIBAVCODEC_FFMPEG
-    ret = audio_file_decode_ffmpeg(inf)
+    ret = audio_file_decode_ffmpeg(inf);
 #endif
 
     return ret;
@@ -526,7 +669,7 @@ int audio_file_encode(s_audinfo_t *inf)
     int ret = 0;
 
 #ifdef USE_LIBAVCODEC_FFMPEG
-    ret = audio_file_encode_ffmpeg(inf)
+    ret = audio_file_encode_ffmpeg(inf);
 #endif
 
     return ret;
@@ -544,7 +687,9 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
     AVPacket avpkt;
     AVFrame *decoded_frame = NULL;
     enum AVCodecID codec_id = audio_codec_bba_to_ffmpeg(inf->codec_type);
-
+Loge("codec_id=%d, register codec...", codec_id);
+    avcodec_register_all();
+Loge("av init packet...");
     av_init_packet(&avpkt);
 
     printf("Decode audio file %s to %s\n", inf->fnamei, inf->fnameo);
@@ -555,34 +700,40 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
         fprintf(stderr, "Codec not found\n");
         exit(1);
     }
-
+Loge("codec found, allocating...");
     c = avcodec_alloc_context3(codec);
     if (!c) {
         fprintf(stderr, "Could not allocate audio codec context\n");
         exit(1);
     }
-
+Loge("allocate done, codec opening...");
     /* open it */
     if (avcodec_open2(c, codec, NULL) < 0) {
         fprintf(stderr, "Could not open codec\n");
         exit(1);
     }
-
+Loge("codec open; open input file...");
     f = fopen(inf->fnamei, "rb");
     if (!f) {
         fprintf(stderr, "Could not open %s\n", inf->fnamei);
         exit(1);
     }
+Loge("open output file...");
     outfile = fopen(inf->fnameo, "wb");
     if (!outfile) {
         av_free(c);
         exit(1);
     }
-
+Loge("read head...");
+    int frame_begin = 0;
+    if (inf->codec_type == CODEC_MP3)
+        frame_begin = find_valid_mp3_head(f);
+    fseek(f, frame_begin, SEEK_SET);
+Loge("frame begin position: 0x%x", frame_begin);
     /* decode until eof */
     avpkt.data = inbuf;
     avpkt.size = fread(inbuf, 1, AUDIO_INBUF_SIZE, f);
-
+int len_done = 0;
     while (avpkt.size > 0) {
         int got_frame = 0;
 
@@ -595,7 +746,8 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
 
         len = avcodec_decode_audio4(c, decoded_frame, &got_frame, &avpkt);
         if (len < 0) {
-            fprintf(stderr, "Error while decoding\n");
+            fprintf(stderr, "Error while decoding, len=%d %x\n", len, len);
+            Loge("avpkt.size=%d, len_done=%d", avpkt.size, len_done);
             exit(1);
         }
         if (got_frame) {
@@ -610,6 +762,7 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
             }
             fwrite(decoded_frame->data[0], 1, data_size, outfile);
         }
+        len_done += len;
         avpkt.size -= len;
         avpkt.data += len;
         avpkt.dts =
@@ -627,6 +780,7 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
                 avpkt.size += len;
         }
     }
+    Loge("Done. avpkt.size=%d len_done=%d", avpkt.size, len_done);
 
     fclose(outfile);
     fclose(f);
@@ -641,7 +795,143 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf)
 int audio_file_encode_ffmpeg(s_audinfo_t *inf)
 {
     int ret = 0;
+#if 0
+    AVCodec *codec;
+    AVCodecContext *c= NULL;
+    AVFrame *frame;
+    AVPacket pkt;
+    int i, j, k, ret, got_output;
+    int buffer_size;
+    FILE *f;
+    uint16_t *samples;
+    float t, tincr;
+    enum AVCodecID codec_id = audio_codec_bba_to_ffmpeg(inf->codec_type);
 
+    printf("Encode audio file %s\n", inf->fnamei);
+    avcodec_register_all();
+
+    /* find the encoder */
+    codec = avcodec_find_encoder(codec_id);
+    if (!codec) {
+        fprintf(stderr, "Codec not found\n");
+        exit(1);
+    }
+
+    c = avcodec_alloc_context3(codec);
+    if (!c) {
+        fprintf(stderr, "Could not allocate audio codec context\n");
+        exit(1);
+    }
+
+    /* put sample parameters */
+    c->bit_rate = 64000;
+
+    /* check that the encoder supports s16 pcm input */
+    c->sample_fmt = AV_SAMPLE_FMT_S16;
+    if (!check_sample_fmt(codec, c->sample_fmt)) {
+        fprintf(stderr, "Encoder does not support sample format %s",
+                av_get_sample_fmt_name(c->sample_fmt));
+        exit(1);
+    }
+
+    /* select other audio parameters supported by the encoder */
+    c->sample_rate    = select_sample_rate(codec);
+    c->channel_layout = select_channel_layout(codec);
+    c->channels       = av_get_channel_layout_nb_channels(c->channel_layout);
+
+    /* open it */
+    if (avcodec_open2(c, codec, NULL) < 0) {
+        fprintf(stderr, "Could not open codec\n");
+        exit(1);
+    }
+
+    f = fopen(inf->fnamei, "wb");
+    if (!f) {
+        fprintf(stderr, "Could not open %s\n", inf->fnamei);
+        exit(1);
+    }
+
+    /* frame containing input raw audio */
+    frame = av_frame_alloc();
+    if (!frame) {
+        fprintf(stderr, "Could not allocate audio frame\n");
+        exit(1);
+    }
+
+    frame->nb_samples     = c->frame_size;
+    frame->format         = c->sample_fmt;
+    frame->channel_layout = c->channel_layout;
+
+    /* the codec gives us the frame size, in samples,
+     * we calculate the size of the samples buffer in bytes */
+    buffer_size = av_samples_get_buffer_size(NULL, c->channels, c->frame_size,
+                                             c->sample_fmt, 0);
+    if (buffer_size < 0) {
+        fprintf(stderr, "Could not get sample buffer size\n");
+        exit(1);
+    }
+    samples = av_malloc(buffer_size);
+    if (!samples) {
+        fprintf(stderr, "Could not allocate %d bytes for samples buffer\n",
+                buffer_size);
+        exit(1);
+    }
+    /* setup the data pointers in the AVFrame */
+    ret = avcodec_fill_audio_frame(frame, c->channels, c->sample_fmt,
+                                   (const uint8_t*)samples, buffer_size, 0);
+    if (ret < 0) {
+        fprintf(stderr, "Could not setup audio frame\n");
+        exit(1);
+    }
+
+    /* encode a single tone sound */
+    t = 0;
+    tincr = 2 * M_PI * 440.0 / c->sample_rate;
+    for (i = 0; i < 200; i++) {
+        av_init_packet(&pkt);
+        pkt.data = NULL; // packet data will be allocated by the encoder
+        pkt.size = 0;
+
+        for (j = 0; j < c->frame_size; j++) {
+            samples[2*j] = (int)(sin(t) * 10000);
+
+            for (k = 1; k < c->channels; k++)
+                samples[2*j + k] = samples[2*j];
+            t += tincr;
+        }
+        /* encode the samples */
+        ret = avcodec_encode_audio2(c, &pkt, frame, &got_output);
+        if (ret < 0) {
+            fprintf(stderr, "Error encoding audio frame\n");
+            exit(1);
+        }
+        if (got_output) {
+            fwrite(pkt.data, 1, pkt.size, f);
+            av_free_packet(&pkt);
+        }
+    }
+
+    /* get the delayed frames */
+    for (got_output = 1; got_output; i++) {
+        ret = avcodec_encode_audio2(c, &pkt, NULL, &got_output);
+        if (ret < 0) {
+            fprintf(stderr, "Error encoding frame\n");
+            exit(1);
+        }
+
+        if (got_output) {
+            fwrite(pkt.data, 1, pkt.size, f);
+            av_free_packet(&pkt);
+        }
+    }
+    fclose(f);
+
+    av_freep(&samples);
+    av_frame_free(&frame);
+    avcodec_close(c);
+    av_free(c);
+
+#endif
     return ret;
 }
 
@@ -651,16 +941,70 @@ enum AVCodecID audio_codec_bba_to_ffmpeg(int codec)
     switch (codec) {
     case CODEC_PCM:
         ret = AV_CODEC_ID_PCM_S16LE;
+        break;
     case CODEC_MP3:
         ret = AV_CODEC_ID_MP3;
+        break;
     case CODEC_AAC:
         ret = AV_CODEC_ID_AAC;
+        break;
     case CODEC_AMR:
         ret = AV_CODEC_ID_AMR_NB;
+        break;
     case CODEC_AWB:
         ret = AV_CODEC_ID_AMR_WB;
+        break;
     }
     return ret;
 }
 #endif
+
+int find_valid_mp3_head(FILE *fp){
+    int ret = -1;
+    if (fp == NULL) {
+        Loge("empty file! return");
+        return ret;
+    }
+    int orig_posi = ftell(fp);
+    int flen = 0;
+
+    fseek(fp, 0, SEEK_END);
+    flen = ftell(fp);
+    rewind(fp);
+    Loge("original position 0x%x, file length: 0x%x", orig_posi, flen);
+    
+    int fposi = 0;
+    char buf[10] = {0};
+    /*
+    while (fposi < flen - 3) {
+        fread(&value, sizeof(value), 1, fp);
+        if (id3_is_valid(value))
+            
+        if (head_is_valid(value))
+            return fposi;
+        else
+            fseek(fp, -3L, SEEK_CUR);
+        fposi++;
+    }*/
+    fread(buf, sizeof(buf), 1, fp);
+    fposi += sizeof(buf);
+    if ((buf[0] == 0x49) && (buf[1] == 0x44) && (buf[2] == 0x33)) {   //"ID3"
+        fposi += (buf[7] << 14) + (buf[8] << 7) + buf[9];
+        Loge("position is %x", fposi);
+        return fposi;
+    }
+
+    fseek(fp, orig_posi, SEEK_SET);
+    return ret;
+}
+
+int head_is_valid(int value) {
+    int ret = 0;
+    if ((((value >> 20) & 0xFFF) == 0xFFF) &&
+        (((value >> 17) & 0x7) == 0x7)) {
+        Loge("value is 0x%x", value);
+        ret = 1;
+    }
+    return ret;
+}
 

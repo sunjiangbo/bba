@@ -79,7 +79,7 @@
 /*
  * AVCODEC third party library
  */
-//#define USE_LIBAVCODEC_FFMPEG
+#define USE_LIBAVCODEC_FFMPEG
 #ifdef USE_LIBAVCODEC_FFMPEG
 #include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
@@ -221,11 +221,18 @@ extern int optind, opterr, optopt;
 #define _GNU_SOURCE
 #include <getopt.h>
 
-int getopt_long(int argc, char * const argv[], const char *optstring,
-		const struct option *longopts, int *longindex);
+int getopt_long(int argc, char * const argv[],
+           const char *optstring,
+           const struct option *longopts, int *longindex);
 
 enum {
-	MAIN_HELP, GEN_HELP, PLAY_HELP, RECORD_HELP, CONV_HELP, INFO_HELP, MAX_HELP
+    MAIN_HELP,
+    GEN_HELP,
+    PLAY_HELP,
+    RECORD_HELP,
+    CONV_HELP,
+    INFO_HELP,
+    MAX_HELP
 };
 
 enum {
@@ -250,7 +257,12 @@ enum {
 };
 
 enum CODEC_TYPE {
-	CODEC_PCM, CODEC_MP3, CODEC_AAC, CODEC_AMR, CODEC_AWB, CODEC_MAX
+    CODEC_PCM,
+    CODEC_MP3,
+    CODEC_AAC,
+    CODEC_AMR,
+    CODEC_AWB,
+    CODEC_MAX
 };
 
 #define FILESTR_RAW ".raw"
@@ -276,7 +288,6 @@ int save_output(s_audinfo_t *inf);
 int argproc_play(s_audinfo_t *inf, int argc, char *argv[]);
 int playwav(s_audinfo_t *inf);
 int initplay(s_audinfo_t *inf);
-int parsewav(s_audinfo_t *inf);
 
 int argproc_record(s_audinfo_t *inf, int argc, char *argv[]);
 void signal_handler(int sig);
@@ -298,6 +309,11 @@ int frame_info(s_audinfo_t *inf);
 int updatewavhead(s_audinfo_t *inf);
 int parse_filename(char *fname, int length);
 int audinfo(s_audinfo_t *inf);
+int parsewav(s_audinfo_t *inf);
+int parsemp3(s_audinfo_t *inf);
+int parseaac(s_audinfo_t *inf);
+int parseamr(s_audinfo_t *inf);
+int parseawb(s_audinfo_t *inf);
 int alsa_prepare(s_audinfo_t *inf);
 int alsa_play(s_audinfo_t *inf);
 int alsa_record(s_audinfo_t *inf);
@@ -312,6 +328,8 @@ int audio_file_decode_ffmpeg(s_audinfo_t *inf);
 int audio_file_encode_ffmpeg(s_audinfo_t *inf);
 enum AVCodecID audio_codec_bba_to_ffmpeg(int codec);
 #endif
+int find_valid_mp3_head(FILE *fp);
+int head_is_valid(int value);
 
 #endif
 

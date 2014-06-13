@@ -27,9 +27,11 @@ const char info_help[] = "\n"
 "usage:\n"
 "bba info [-h|--help]\n"
 "         [-v|--verbose]\n"
+"         [-i <filename>\n"
 "    -h  --help\n"
 "    -l  --list                  info list\n"
-"    -v  --verbose               enable verbose print.\n";
+"    -v  --verbose               enable verbose print.\n"
+"    -i <filename>               input filename\n";
 
 int argproc_info(s_audinfo_t *inf, int argc, char *argv[])
 {
@@ -43,7 +45,7 @@ int argproc_info(s_audinfo_t *inf, int argc, char *argv[])
 
     while (1) {
         int option_index = 0;
-		static const char short_options[] = "hlv";
+		static const char short_options[] = "hlvi:";
         static const struct option long_options[] = {
             {"help",    0, 0, 'h'},
             {"list",    0, 0, 'l'},
@@ -59,33 +61,66 @@ int argproc_info(s_audinfo_t *inf, int argc, char *argv[])
         switch (c) {
         case 'h':
             usage(INFO_HELP);
-            break;    
+            break;
         case 'l':
             break;
         case 'v':
             debug_log = 1;
+            break;
+        case 'i':
+            ret = strlen(optarg);
+            if (ret < sizeof(inf->fnamei)) {
+                memset(inf->fnamei, 0, sizeof(inf->fnamei));
+                strncpy(inf->fnamei, optarg, ret);
+            } else
+                return -1;
             break;
         default:
             break;
         }
     }
 
-    info_process(inf);
+    ret = info_process(inf);
     return ret;
 }
 
 int info_process(s_audinfo_t *inf)
 {
 	int ret = 0;
-	int input_filetype = parse_filename(inf->fnamei, FILENAME_SIZE);
-	int input_compressed = file_is_compressed(input_filetype);
+    int filetype;
 
-	if (input_compressed) {
-		inf->codec_type = file_to_codec(input_filetype);
-		search_frames(inf);
-	}
+    /* misc check */
+    filetype = parse_filename(inf->fnamei, strlen(inf->fnamei));
+    Log("%d", filetype);
 
-	return ret;
+    /* parse file */
+    switch (filetype) {
+    case FILE_RAW:
+    case FILE_PCM:
+        Log("raw data, can not parse");
+        ret = 0;
+        break;
+    case FILE_WAV:
+        ret = parsewav(inf);
+        break;
+    case FILE_MP3:
+        ret = parsemp3(inf);
+        break;
+    case FILE_AAC:
+        ret = parseaac(inf);
+        break;
+    case FILE_AMR:
+        ret = parseamr(inf);
+        break;
+    case FILE_AWB:
+        ret = parseawb(inf);
+        break;
+    default:
+        Loge("Unsupported file type");
+        break;
+    }
+
+    return ret;
 }
 
 int search_tags(s_audinfo_t *inf)

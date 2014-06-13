@@ -80,7 +80,7 @@ int argproc_record(s_audinfo_t *inf, int argc, char *argv[])
         switch (c) {
         case 'h':
             usage(RECORD_HELP);
-            break;    
+            break;
         case 'l':
             break;
         case 'v':

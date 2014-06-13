@@ -226,6 +226,7 @@ int generate_process(s_audinfo_t *inf)
     /* allocate buffer */
     inf->databytes = inf->length * inf->rate * inf->nchan * (inf->width >> 3);
     inf->nsample = inf->length * inf->rate;
+    Log("inf->databytes %d inf->nsample %d", inf->databytes, inf->nsample);
     if ((inf->data = calloc(sizeof(char), inf->databytes)) == NULL) {
         Loge("allocate data buffer failed, exit.");
         return -1;
@@ -373,10 +374,19 @@ int save_output(s_audinfo_t *inf)
     }
 
     filetype = parse_filename(inf->fnameo, strlen(inf->fnameo));
-    if (filetype == FILE_WAV)
+    Log("filetype %d", filetype);
+    if (filetype == FILE_WAV) {
         ret = fwrite(inf->wavhead, sizeof(char), WAVHEAD_SIZE, inf->fpo);
-    if (filetype == FILE_WAV || filetype == FILE_RAW || filetype == FILE_PCM)
+        Log("write head: %d", ret);
+        if (ret == WAVHEAD_SIZE)
+            ret = 0;
+    }
+    if (filetype == FILE_WAV || filetype == FILE_RAW || filetype == FILE_PCM) {
         ret = fwrite(inf->data, sizeof(char), inf->databytes, inf->fpo);
+        Log("write data: %d", ret);
+        if (ret == inf->databytes)
+            ret = 0;
+    }
 
     fclose(inf->fpo);
 end:

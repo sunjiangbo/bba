@@ -65,7 +65,7 @@ int argproc_play(s_audinfo_t *inf, int argc, char *argv[])
         switch (c) {
         case 'h':
             usage(PLAY_HELP);
-            break;    
+            break;
         case 'l':
             break;
         case 'v':
@@ -147,105 +147,6 @@ int initplay(s_audinfo_t *inf)
     inf->alsa.stream = SND_PCM_STREAM_PLAYBACK;
     inf->alsa.access = SND_PCM_ACCESS_RW_INTERLEAVED;
     inf->alsa.format = SND_PCM_FORMAT_S16_LE;
-    return ret;
-}
-
-int parsewav(s_audinfo_t *inf)
-{
-    int ret = 0;
-
-    if ((inf->fpi = fopen(inf->fnamei, "rb")) == NULL){
-        fprintf (stderr, "Input file '%s' does not exist !!\n", inf->fnamei);
-        return -1;
-    } else {
-        fseek(inf->fpi, 0L, SEEK_END);
-        inf->filebytes = ftell(inf->fpi);
-        rewind(inf->fpi);
-        Log("Open input '%s' [%d bytes] succeed.", inf->fnamei, inf->filebytes);
-    }
-
-    /* read wav info to inf->wav structure */
-    ret = fread(inf->wavhead, sizeof(char), WAVHEAD_SIZE, inf->fpi);
-    if (ret != WAVHEAD_SIZE) {
-        Loge("read %d of %ld", ret, WAVHEAD_SIZE);
-        ret = -1;
-        goto end;
-    } else
-        ret = 0;
-
-    int idx = 0;
-    inf->wave.riffid = str2int32(inf->wavhead + idx, 1);
-    idx += 4;
-    if (inf->wave.riffid != WAV_RIFF_ID) {
-        Loge("riffid %x not match %x", inf->wave.riffid, WAV_RIFF_ID);
-        goto end;
-    }
-
-    inf->wave.riffsz = str2int32(inf->wavhead + idx, inf->ibn);
-    idx += 4;
-
-    inf->wave.waveid = str2int32(inf->wavhead + idx, 1);
-    idx += 4;
-    if (inf->wave.waveid != WAV_WAVE_ID) {
-        Loge("waveid %x not match %x", inf->wave.waveid, WAV_WAVE_ID);
-        goto end;
-    }
-
-    inf->wave.fmtid = str2int32(inf->wavhead + idx, 1);
-    idx += 4;
-    if (inf->wave.fmtid != WAV_FMT_ID) {
-        Loge("fmtid %x not match %x", inf->wave.fmtid, WAV_FMT_ID);
-        goto end;
-    }
-
-    inf->wave.fmtsz     = str2int32(inf->wavhead + idx, inf->ibn);
-    idx += 4;
-
-    inf->wave.ftag      = str2int16(inf->wavhead + idx, inf->ibn);
-    idx += 2;
-
-    inf->wave.nchan     = str2int16(inf->wavhead + idx, inf->ibn);
-    idx += 2;
-
-    inf->wave.samplerate= str2int32(inf->wavhead + idx, inf->ibn);
-    idx += 4;
-
-    inf->wave.byte_rate = str2int32(inf->wavhead + idx, inf->ibn);
-    idx += 4;
-
-    inf->wave.blockalign= str2int16(inf->wavhead + idx, inf->ibn);
-    idx += 2;
-
-    inf->wave.width     = str2int16(inf->wavhead + idx, inf->ibn);
-    idx += 2;
-
-    inf->wave.dataid = str2int32(inf->wavhead + idx, 1);
-    idx += 4;
-    if (inf->wave.dataid != WAV_DATA_ID) {
-        Loge("dataid %x not match %x", inf->wave.dataid, WAV_DATA_ID);
-        goto end;
-    }
-
-    inf->wave.datasz = str2int32(inf->wavhead + idx, inf->ibn);
-    idx += 4;
-
-    /* refresh inf structure from inf->wav structure */
-    inf->ibn = 0;
-    inf->voldb = 0.0;
-    inf->volgain = 0.0;
-    inf->length = (double)inf->wave.datasz / inf->wave.nchan /\
-                  (inf->wave.width >> 3) / inf->wave.samplerate;
-    inf->recsize = 0;
-    inf->width = inf->wave.width;
-    inf->rate = inf->wave.samplerate;
-    inf->nchan = inf->wave.nchan;
-    inf->nsample = inf->wave.datasz / inf->wave.nchan / (inf->wave.width >> 3);
-    inf->databytes = inf->wave.datasz;
-    inf->filebytes = inf->wave.riffsz + 8;
-
-end:
-    fclose(inf->fpi);
-    audinfo(inf);
     return ret;
 }
 

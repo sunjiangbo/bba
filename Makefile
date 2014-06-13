@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS := -c -Wall
-LDFLAGS :=-lm -lasound -ldl -lpthread -I../include
+LDFLAGS :=-lm -lasound -ldl -lpthread -lavcodec
 EXECUTABLE = bba
 OBJDIR = objdir
 OBJS = $(patsubst %.c,%.o,$(wildcard *.c))
